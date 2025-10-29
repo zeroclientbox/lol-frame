@@ -1,21 +1,39 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <!-- Wide image so Warpcast shows a real preview -->
-    <meta property="og:title" content="AL vs T1 – Who advances to LoL Worlds Semifinals?" />
-    <meta property="og:description" content="Quick take – AL 51 % vs T1 49 % (NFA)" />
-    <meta property="og:image" content="https://placehold.co/1200x630/png?text=AL+vs+T1" />
+    <meta charset="utf-8" />
+    <title>AL vs T1 – AI Odds (Frame)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- ===== Basic Open Graph (helps preview anywhere, including Warpcast) ===== -->
+    <meta property="og:title" content="AL vs T1 – Who advances to Worlds Semifinals?" />
+    <meta property="og:description" content="Live Gemini odds + 1–2 sentence rationale (NFA). Tap a side or open the market." />
+    <!-- Use your deployed dynamic image endpoint -->
+    <meta property="og:image" content="https://lol-frame.vercel.app/api/og?title=AL%20vs%20T1%20%E2%80%93%20Who%20advances%3F&sideA=AL&sideB=T1" />
+    <!-- You can point og:url at the market or at this frame page; either is fine -->
     <meta property="og:url" content="https://myriad.markets/markets/al-vs-t1-who-advances-to-worlds-semifinals" />
 
-    <!-- Farcaster Frame -->
+    <!-- ===== Farcaster Frame meta ===== -->
     <meta property="fc:frame" content="vNext" />
     <meta property="fc:frame:aspect_ratio" content="1.91:1" />
-    <meta property="fc:frame:image" content="https://placehold.co/1200x630/png?text=AL+vs+T1" />
+    <!-- The image is your dynamic SVG (auto-pulls Gemini and renders slider + rationale) -->
+    <meta property="fc:frame:image" content="https://lol-frame.vercel.app/api/og?title=AL%20vs%20T1%20%E2%80%93%20Who%20advances%3F&sideA=AL&sideB=T1" />
 
-    <!-- Simple one-button link (no backend) -->
-    <meta property="fc:frame:button:1" content="Open Market" />
+    <!-- Up to 4 buttons; we’ll do three simple link actions -->
+    <meta property="fc:frame:button:1" content="AL" />
     <meta property="fc:frame:button:1:action" content="link" />
-    <meta property="fc:frame:button:1:target" content="https://myriad.markets/markets/al-vs-t1-who-advances-to-worlds-semifinals" />
+    <meta property="fc:frame:button:1:target"
+          content="https://myriad.markets/markets/al-vs-t1-who-advances-to-worlds-semifinals?pick=AL" />
+
+    <meta property="fc:frame:button:2" content="T1" />
+    <meta property="fc:frame:button:2:action" content="link" />
+    <meta property="fc:frame:button:2:target"
+          content="https://myriad.markets/markets/al-vs-t1-who-advances-to-worlds-semifinals?pick=T1" />
+
+    <meta property="fc:frame:button:3" content="Open Market" />
+    <meta property="fc:frame:button:3:action" content="link" />
+    <meta property="fc:frame:button:3:target"
+          content="https://myriad.markets/markets/al-vs-t1-who-advances-to-worlds-semifinals" />
   </head>
   <body></body>
 </html>
