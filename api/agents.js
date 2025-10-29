@@ -10,14 +10,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  const prompt = `
-You are a sports prediction assistant.
-Estimate the probability (0–100) that "${sideA}" beats "${sideB}" in "${title}".
-Give a concise factual rationale (recent form, head-to-head, injuries, etc).
-Return STRICT JSON only in this shape:
+const prompt = `
+You are an AI prediction analyst for esports, specializing in League of Legends.
+Task: Estimate the probability (0–100) that "${sideA}" will beat "${sideB}" in "${title}".
+The match refers to the **2025 League of Legends World Championship (Worlds 2025)**.
+Use general team strength, player performance trends, recent meta, and known factors as of 2025.
+If no official result exists yet, reason based on likely performance.
+Return STRICT JSON in this shape:
 {"prob": <integer 0..100>, "rationale": "<short factual reason. NFA>"}
-Avoid 50 unless the matchup is genuinely even or uncertain; justify if 50.
+Example output:
+{"prob": 65, "rationale": "T1 are defending champions and have a superior macro game; AL's early game has been inconsistent. NFA"}
+Avoid 50 unless truly even or no info is available.
 `;
+
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
