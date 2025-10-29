@@ -1,13 +1,12 @@
 // /api/agents.js
-// Gemini 2.5 Flash prediction for a generic binary market
-// Usage:
-//   /api/agents?ask=Who%20advances%20to%20Worlds%20Semifinals%3F&choices=AL|T1
-// Optional:
-//   &year=2025  &context=short%20notes
-//
-// Returns: { gem: { prob, rationale }, left, right }
+// Gemini 2.5 Flash prediction for a binary market (Myriad-style)
 
 export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
   const {
     ask = "Which outcome is more likely?",
     choices = "Yes|No",
@@ -27,20 +26,18 @@ export default async function handler(req, res) {
     return;
   }
 
+  const asOf = new Date().toISOString();
   const prompt = `
-You are an AI prediction analyst.
+You are an AI prediction analyst providing Myriad-style probabilities.
+
+Task: Predict which project will rank higher on CoinMarketCap on Nov 2, 2025.
 Question: "${ask}"
 Choices (binary): "${left}" (FIRST) vs "${right}" (SECOND).
-Year/season context: ${year}.
-Additional context (optional): ${context || "none"}.
+Context: ${context || "none"}.
+Assume today's date is ${asOf}. Use publicly known crypto trends only.
 
-Task:
-- Estimate the probability (0–100) that the FIRST choice "${left}" is correct (or will happen).
-- Provide a short factual rationale (1–2 sentences) referencing the most relevant factors (recent form, H2H, macro trend, injuries/news, fundamentals, etc. as applicable).
-- If information is genuinely even/uncertain, it's okay to return ~50%, but justify briefly.
-
-Return STRICT JSON only:
-{"prob": <integer 0..100>, "rationale": "<concise reason. NFA>"}
+Return STRICT JSON ONLY (no markdown, no commentary):
+{"prob": <integer 0–100>, "rationale": "<≤200 characters, concise factual reason. NFA>"}
 `;
 
   try {
@@ -62,7 +59,7 @@ Return STRICT JSON only:
     res.status(200).json({
       left,
       right,
-      gem: { prob: clamp(prob ?? 50), rationale: clip(rationale || "NFA", 220) }
+      gem: { prob: clamp(prob ?? 50), rationale: clip(rationale || "NFA", 200) }
     });
   } catch (e) {
     res.setHeader("Cache-Control", "no-store");
@@ -85,5 +82,6 @@ function parseJSONish(s) {
   const rationale = rat ? rat[1] : undefined;
   return { prob, rationale };
 }
+
 function clamp(n){ const x = Number(n); if (!Number.isFinite(x)) return 50; return Math.max(0, Math.min(100, Math.round(x))); }
 function clip(s,n){ const t = String(s||"").replace(/\s+/g," ").trim(); return t.length<=n?t:t.slice(0,n-1)+"…"; }
