@@ -1,5 +1,5 @@
 // /api/og.js
-// Returns a 1200x630 SVG with 3 sliders for ChatGPT, Grok, Gemini.
+// Returns a 1200x630 SVG with 3 sliders for ChatGPT, Grok, and Gemini.
 // Usage: /api/og?gpt=53&grok=47&gem=49&title=AL%20vs%20T1
 
 export default function handler(req, res) {
@@ -55,8 +55,9 @@ function renderSVG({ title, gpt, grok, gem }) {
   <text x="${P}" y="${startY + GAP*2 - 8}" font-size="28" fill="#B8BCC9" font-family="Inter,system-ui,-apple-system,Segoe UI,Roboto">Gemini</text>
   ${bar(P, startY + GAP*2, BW, BH, gem, "#232532", "#7aa2ff")}
 
+  <!-- Fixed XML-safe text -->
   <text x="${P}" y="${H - 40}" font-size="20" fill="#8a90a4" font-family="Inter,system-ui,-apple-system,Segoe UI,Roboto">
-    Tip: change query (?gpt=&grok=&gem=) to update sliders
+    Tip: change query (?gpt=&amp;grok=&amp;gem=) to update sliders
   </text>
 </svg>`;
 }
