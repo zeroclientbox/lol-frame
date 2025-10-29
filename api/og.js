@@ -1,66 +1,114 @@
 // /api/og.js
-// Dynamic SVG for Farcaster Frame using Gemini odds + rationale
+// Myriad-style SVG card using Gemini odds.
+// Params:
+//   title=...        (card headline)
+//   ask=...          (what we send to Gemini)
+//   choices=A|B      (first = left/primary side we predict for)
+//   img=URL          (hero image; optional)
+//   url=URL          (market deep link; not shown in image, but useful to keep same in index.html)
+//   year=2025        (optional, forwarded to agents)
+//   context=...      (optional, forwarded to agents)
+
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  const url = new URL(req.url);
-  const title = url.searchParams.get("title") || "AL vs T1 – Who advances?";
-  const sideA = url.searchParams.get("sideA") || "AL";
-  const sideB = url.searchParams.get("sideB") || "T1";
+  const u = new URL(req.url);
+  const title   = u.searchParams.get("title")   || "Who wins?";
+  const ask     = u.searchParams.get("ask")     || "Which outcome is more likely?";
+  const choices = u.searchParams.get("choices") || "Yes|No";
+  const img     = u.searchParams.get("img")     || "";
+  const year    = u.searchParams.get("year")    || "2025";
+  const context = u.searchParams.get("context") || "";
 
-  // Fetch Gemini results from our server-side agent
-  let prob = 50;
-  let rationale = "No rationale.";
+  // Query agents once
+  const agentsURL = `${req.nextUrl.origin}/api/agents?ask=${encodeURIComponent(ask)}&choices=${encodeURIComponent(choices)}&year=${encodeURIComponent(year)}&context=${encodeURIComponent(context)}&ts=${Date.now()}`;
+  let left = "Yes", right = "No", prob = 50, rationale = "NFA";
   try {
-    const agents = await fetch(`${req.nextUrl.origin}/api/agents?title=${encodeURIComponent(title)}&sideA=${encodeURIComponent(sideA)}&sideB=${encodeURIComponent(sideB)}`, { cache: "no-store" });
-    const data = await agents.json();
-    if (data?.gem?.prob != null) prob = clamp(data.gem.prob);
-    if (data?.gem?.rationale) rationale = clip(data.gem.rationale, 220);
+    const r = await fetch(agentsURL, { cache: "no-store" });
+    const j = await r.json();
+    if (j?.left) left = j.left;
+    if (j?.right) right = j.right;
+    if (j?.gem?.prob != null) prob = clamp(j.gem.prob);
+    if (j?.gem?.rationale) rationale = j.gem.rationale;
   } catch {}
 
-  // Render
-  const W = 1200, H = 630, P = 64;
-  const barW = 900, barH = 40, filled = Math.round((prob / 100) * barW);
+  // Card metrics
+  const W = 1200, H = 630, R = 28;
+  const P = 28;
+  const trackW = W - P*2;
+  const trackY = 330;
+  const trackH = 18;
+  const filled = Math.round(trackW * (prob / 100));
 
+  const percentLeft  = `${prob}%`;
+  const percentRight = `${100 - prob}%`;
+
+  // SVG
   const svg = `
 <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b0d14"/>
-      <stop offset="100%" stop-color="#121527"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f1222"/>
+      <stop offset="100%" stop-color="#0a0d18"/>
+    </linearGradient>
+    <linearGradient id="fillL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7ad0a6"/>
+      <stop offset="100%" stop-color="#88e6b5"/>
+    </linearGradient>
+    <linearGradient id="track" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#20263a"/>
+      <stop offset="100%" stop-color="#242b42"/>
     </linearGradient>
   </defs>
-  <rect width="${W}" height="${H}" fill="url(#bg)"/>
 
-  <text x="${P}" y="110" font-size="44" fill="#EDEFF5" font-family="Inter, system-ui, -apple-system, Roboto" font-weight="600">
+  <!-- Card -->
+  <rect x="0" y="0" width="${W}" height="${H}" rx="${R}" fill="url(#bg)"/>
+
+  <!-- Hero image -->
+  ${img ? `
+    <clipPath id="heroClip"><rect x="${P}" y="${P}" width="${W - 2*P}" height="180" rx="18"/></clipPath>
+    <image href="${escapeXML(img)}" x="${P}" y="${P}" width="${W - 2*P}" height="180" preserveAspectRatio="xMidYMid slice" clip-path="url(#heroClip)"/>
+  ` : ''}
+
+  <!-- Title -->
+  <text x="${P}" y="${img ? 240 : 120}" font-size="34" fill="#E9EDF7" font-family="Inter, system-ui, -apple-system, Roboto" font-weight="600">
     ${escapeXML(title)}
   </text>
 
-  <text x="${P}" y="170" font-size="28" fill="#8fa3d8" font-family="Inter, system-ui, -apple-system, Roboto">${escapeXML(sideA)}</text>
-  <text x="${W - P}" y="170" font-size="28" fill="#f18aa8" font-family="Inter, system-ui, -apple-system, Roboto" text-anchor="end">${escapeXML(sideB)}</text>
+  <!-- Slim bar like Myriad -->
+  <rect x="${P}" y="${trackY}" width="${trackW}" height="${trackH}" rx="${trackH/2}" fill="url(#track)"/>
+  <rect x="${P}" y="${trackY}" width="${filled}" height="${trackH}" rx="${trackH/2}" fill="url(#fillL)"/>
 
-  <rect x="${P}" y="200" width="${barW}" height="${barH}" rx="10" fill="#1a1f2e"/>
-  <rect x="${P}" y="200" width="${filled}" height="${barH}" rx="10" fill="#7aa2ff"/>
+  <!-- Percent labels -->
+  <text x="${P}" y="${trackY - 10}" fill="#A7B1CA" font-size="22" font-family="Inter, system-ui" dominant-baseline="ideographic">${percentLeft}</text>
+  <text x="${W - P}" y="${trackY - 10}" fill="#A7B1CA" font-size="22" font-family="Inter, system-ui" text-anchor="end" dominant-baseline="ideographic">${percentRight}</text>
 
-  <text x="${P + barW/2}" y="260" font-size="26" fill="#EDEFF5" font-family="Inter, system-ui, -apple-system, Roboto" text-anchor="middle">
-    Gemini: ${prob}% ${escapeXML(sideA)} (NFA)
-  </text>
+  <!-- Choice pills -->
+  ${pill(P, trackY + 38, 220, 46, left, true)}
+  ${pill(P + 240, trackY + 38, 220, 46, right, false)}
 
-  <foreignObject x="${P}" y="300" width="${W - 2*P}" height="200">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, system-ui, -apple-system, Roboto; color:#C9CEDA; font-size:22px; line-height:1.35;">
+  <!-- Rationale -->
+  <foreignObject x="${P}" y="${trackY + 100}" width="${W - 2*P}" height="140">
+    <div xmlns="http://www.w3.org/1999/xhtml"
+         style="font-family: Inter, system-ui, -apple-system, Roboto; color:#bec6dc; font-size:22px; line-height:1.35;">
       ${escapeXML(rationale)}
     </div>
   </foreignObject>
 
-  <text x="${P}" y="${H - 36}" font-size="18" fill="#8a90a4" font-family="Inter, system-ui, -apple-system, Roboto">
-    Source: Gemini 1.5 Flash • Updated on request • NFA
-  </text>
+  <!-- Footer -->
+  <text x="${P}" y="${H - 24}" font-size="18" fill="#7983a3" font-family="Inter, system-ui">Source: Gemini 2.5 Flash • Updated on request • NFA</text>
 </svg>
 `;
-
   return new Response(svg, { headers: { "Content-Type": "image/svg+xml" } });
 }
 
-function clamp(n){ n = Math.round(n); return Math.max(0, Math.min(100, n)); }
-function clip(s, n){ s = String(s).replace(/\s+/g, " ").trim(); return s.length <= n ? s : s.slice(0, n - 1) + "…"; }
-function escapeXML(s){ return String(s).replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'})[c]); }
+function pill(x, y, w, h, label, primary) {
+  const bg = primary ? "#16302a" : "#2a2330";
+  const fg = primary ? "#75d2a8" : "#e199bd";
+  return `
+  <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h/2}" fill="${bg}" />
+  <text x="${x + w/2}" y="${y + h/2 + 7}" fill="${fg}" font-size="22" font-family="Inter, system-ui" text-anchor="middle">${escapeXML(label)}</text>
+  `;
+}
+function clamp(n){ const x = Number(n); if (!Number.isFinite(x)) return 50; return Math.max(0, Math.min(100, Math.round(x))); }
+function escapeXML(s){ return String(s||"").replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'})[c]); }
