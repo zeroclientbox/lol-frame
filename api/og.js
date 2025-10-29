@@ -1,18 +1,9 @@
 // /api/og.js
-// Myriad-style SVG card using Gemini odds.
-// Params:
-//   title=...        (card headline)
-//   ask=...          (what we send to Gemini)
-//   choices=A|B      (first = left/primary side we predict for)
-//   img=URL          (hero image; optional)
-//   url=URL          (market deep link; not shown in image, but useful to keep same in index.html)
-//   year=2025        (optional, forwarded to agents)
-//   context=...      (optional, forwarded to agents)
-
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
   const u = new URL(req.url);
+
   const title   = u.searchParams.get("title")   || "Who wins?";
   const ask     = u.searchParams.get("ask")     || "Which outcome is more likely?";
   const choices = u.searchParams.get("choices") || "Yes|No";
@@ -20,8 +11,15 @@ export default async function handler(req) {
   const year    = u.searchParams.get("year")    || "2025";
   const context = u.searchParams.get("context") || "";
 
-  // Query agents once
-  const agentsURL = `${req.nextUrl.origin}/api/agents?ask=${encodeURIComponent(ask)}&choices=${encodeURIComponent(choices)}&year=${encodeURIComponent(year)}&context=${encodeURIComponent(context)}&ts=${Date.now()}`;
+  // Build the agents URL using the origin from the request URL
+  const agentsURL =
+    `${u.origin}/api/agents` +
+    `?ask=${encodeURIComponent(ask)}` +
+    `&choices=${encodeURIComponent(choices)}` +
+    `&year=${encodeURIComponent(year)}` +
+    `&context=${encodeURIComponent(context)}` +
+    `&ts=${Date.now()}`;
+
   let left = "Yes", right = "No", prob = 50, rationale = "NFA";
   try {
     const r = await fetch(agentsURL, { cache: "no-store" });
@@ -32,18 +30,11 @@ export default async function handler(req) {
     if (j?.gem?.rationale) rationale = j.gem.rationale;
   } catch {}
 
-  // Card metrics
-  const W = 1200, H = 630, R = 28;
-  const P = 28;
-  const trackW = W - P*2;
-  const trackY = 330;
-  const trackH = 18;
+  const W = 1200, H = 630, R = 28, P = 28;
+  const trackW = W - P*2, trackY = 330, trackH = 18;
   const filled = Math.round(trackW * (prob / 100));
+  const percentLeft = `${prob}%`, percentRight = `${100 - prob}%`;
 
-  const percentLeft  = `${prob}%`;
-  const percentRight = `${100 - prob}%`;
-
-  // SVG
   const svg = `
 <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -61,33 +52,26 @@ export default async function handler(req) {
     </linearGradient>
   </defs>
 
-  <!-- Card -->
   <rect x="0" y="0" width="${W}" height="${H}" rx="${R}" fill="url(#bg)"/>
 
-  <!-- Hero image -->
   ${img ? `
     <clipPath id="heroClip"><rect x="${P}" y="${P}" width="${W - 2*P}" height="180" rx="18"/></clipPath>
     <image href="${escapeXML(img)}" x="${P}" y="${P}" width="${W - 2*P}" height="180" preserveAspectRatio="xMidYMid slice" clip-path="url(#heroClip)"/>
   ` : ''}
 
-  <!-- Title -->
   <text x="${P}" y="${img ? 240 : 120}" font-size="34" fill="#E9EDF7" font-family="Inter, system-ui, -apple-system, Roboto" font-weight="600">
     ${escapeXML(title)}
   </text>
 
-  <!-- Slim bar like Myriad -->
   <rect x="${P}" y="${trackY}" width="${trackW}" height="${trackH}" rx="${trackH/2}" fill="url(#track)"/>
   <rect x="${P}" y="${trackY}" width="${filled}" height="${trackH}" rx="${trackH/2}" fill="url(#fillL)"/>
 
-  <!-- Percent labels -->
   <text x="${P}" y="${trackY - 10}" fill="#A7B1CA" font-size="22" font-family="Inter, system-ui" dominant-baseline="ideographic">${percentLeft}</text>
   <text x="${W - P}" y="${trackY - 10}" fill="#A7B1CA" font-size="22" font-family="Inter, system-ui" text-anchor="end" dominant-baseline="ideographic">${percentRight}</text>
 
-  <!-- Choice pills -->
   ${pill(P, trackY + 38, 220, 46, left, true)}
   ${pill(P + 240, trackY + 38, 220, 46, right, false)}
 
-  <!-- Rationale -->
   <foreignObject x="${P}" y="${trackY + 100}" width="${W - 2*P}" height="140">
     <div xmlns="http://www.w3.org/1999/xhtml"
          style="font-family: Inter, system-ui, -apple-system, Roboto; color:#bec6dc; font-size:22px; line-height:1.35;">
@@ -95,7 +79,6 @@ export default async function handler(req) {
     </div>
   </foreignObject>
 
-  <!-- Footer -->
   <text x="${P}" y="${H - 24}" font-size="18" fill="#7983a3" font-family="Inter, system-ui">Source: Gemini 2.5 Flash • Updated on request • NFA</text>
 </svg>
 `;
