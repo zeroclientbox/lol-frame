@@ -1,5 +1,5 @@
 // /api/agents.js
-// Gemini 2.5 Flash prediction for a binary market (Myriad-style)
+// lol-frame — Gemini 2.5 Flash prediction for a binary market (Myriad-style)
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -28,16 +28,28 @@ export default async function handler(req, res) {
 
   const asOf = new Date().toISOString();
   const prompt = `
-You are an AI prediction analyst providing Myriad-style probabilities.
+You are an AI market analyst writing short-form Myriad-style predictions.
+Your goal is to assign odds and reasoning, not to give advice. Always include NFA (not financial advice).
 
-Task: Predict which project will rank higher on CoinMarketCap on Nov 2, 2025.
-Question: "${ask}"
-Choices (binary): "${left}" (FIRST) vs "${right}" (SECOND).
-Context: ${context || "none"}.
-Assume today's date is ${asOf}. Use publicly known crypto trends only.
+Market question:
+"${ask}"
 
-Return STRICT JSON ONLY (no markdown, no commentary):
-{"prob": <integer 0–100>, "rationale": "<≤200 characters, concise factual reason. NFA>"}
+Binary choices:
+"${left}" (FIRST) vs "${right}" (SECOND)
+
+Context: ${context || "general crypto market"}.
+Assume today's date is ${asOf}. All dates are in ${year}.
+
+Do lightweight reasoning based on your knowledge of market caps, narratives, community traction, listings, and sentiment as of 2024–2025.
+Even without live data, infer relative momentum like a crypto analyst would.
+
+Return STRICT JSON ONLY:
+{
+  "prob": <integer 0–100>,        // probability FIRST choice ("${left}") will rank higher or win
+  "rationale": "<two short sentences (~150–200 chars) summarizing why, e.g. 'Stronger fundamentals, exchange support, and community activity favor ${left}. NFA'>"
+}
+
+If both sides are truly even, you may output ~50, but avoid neutrality unless justified.
 `;
 
   try {
@@ -47,14 +59,14 @@ Return STRICT JSON ONLY (no markdown, no commentary):
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1 }
+        generationConfig: { temperature: 0.25 }
       })
     });
 
     const j = await r.json();
     const text = j?.candidates?.[0]?.content?.parts?.[0]?.text ?? j?.error?.message ?? "";
-
     const { prob, rationale } = parseJSONish(text);
+
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json({
       left,
