@@ -11,17 +11,12 @@ export default async function handler(req, res) {
   }
 
 const prompt = `
-You are an AI prediction analyst for esports, specializing in League of Legends.
-Task: Estimate the probability (0–100) that "${sideA}" will beat "${sideB}" in "${title}".
-The match refers to the **2025 League of Legends World Championship (Worlds 2025)**.
-Use general team strength, player performance trends, recent meta, and known factors as of 2025.
-If no official result exists yet, reason based on likely performance.
-Return STRICT JSON in this shape:
-{"prob": <integer 0..100>, "rationale": "<short factual reason. NFA>"}
-Example output:
-{"prob": 65, "rationale": "T1 are defending champions and have a superior macro game; AL's early game has been inconsistent. NFA"}
-Avoid 50 unless truly even or no info is available.
+You are a real-time sports analyst. Assume today's date is October 28, 2025.
+Estimate the probability (0–100) that "${sideA}" beats "${sideB}" in "${title}".
+Use any reasonable inference based on player form, 2025 roster strength, and likely performance.
+Return JSON: {"prob": <int>, "rationale": "<short reason. NFA>"}
 `;
+
 
 
   try {
