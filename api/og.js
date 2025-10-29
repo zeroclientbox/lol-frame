@@ -11,7 +11,6 @@ export default async function handler(req) {
   const year    = u.searchParams.get("year")    || "2025";
   const context = u.searchParams.get("context") || "";
 
-  // Build the agents URL using the origin from the request URL
   const agentsURL =
     `${u.origin}/api/agents` +
     `?ask=${encodeURIComponent(ask)}` +
@@ -72,9 +71,9 @@ export default async function handler(req) {
   ${pill(P, trackY + 38, 220, 46, left, true)}
   ${pill(P + 240, trackY + 38, 220, 46, right, false)}
 
-  <foreignObject x="${P}" y="${trackY + 100}" width="${W - 2*P}" height="140">
+  <foreignObject x="${P}" y="${trackY + 100}" width="${W - 2*P}" height="200">
     <div xmlns="http://www.w3.org/1999/xhtml"
-         style="font-family: Inter, system-ui, -apple-system, Roboto; color:#bec6dc; font-size:22px; line-height:1.35;">
+         style="font-family: Inter, system-ui, -apple-system, Roboto; color:#bec6dc; font-size:20px; line-height:1.4; overflow-wrap:break-word;">
       ${escapeXML(rationale)}
     </div>
   </foreignObject>
