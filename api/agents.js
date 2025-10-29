@@ -1,9 +1,6 @@
 // /api/agents.js
-// Returns { gem: { prob: 0..100, rationale: string } } from Gemini.
-// Tries multiple API versions/models so it works with your account.
-// Usage: /api/agents?title=LoL%20Worlds%20Quarterfinal%20AL%20vs%20T1%20(Bo5)&sideA=AL&sideB=T1
-// Add &raw=1 for raw Gemini output.
-// ENV: GEMINI_API_KEY
+// Compatible Gemini caller that returns { gem: { prob, rationale } }.
+// Works across v1beta/v1 and multiple model aliases. No special schema fields.
 
 export default async function handler(req, res) {
   const { title = "Match", sideA = "Side A", sideB = "Side B", raw } = req.query;
@@ -13,18 +10,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  const system = `You are a sports prediction assistant.
-Return STRICT JSON only:
-{"prob": <integer 0..100>, "rationale": "<1–2 concise factual sentences (recent form, H2H, injuries, roster news). NFA>"}
-"prob" = probability that "${sideA}" beats "${sideB}" in "${title}".
-Avoid 50 unless truly even or data unclear; justify if 50.`;
-
-  const user = `Event: "${title}"
-Sides: ${sideA} (prob target) vs ${sideB}
-Task: Estimate ${sideA}'s win probability (0–100) and provide a brief rationale (factual, specific, concise).`;
+  // One compact prompt (schema enforced by instruction + parsing)
+  const prompt = `
+You are a sports prediction assistant.
+Task: For the event "${title}", estimate the probability (0–100) that "${sideA}" beats "${sideB}", and give a 1–2 sentence factual rationale.
+Return STRICT JSON only in the shape: {"prob": <integer 0..100>, "rationale": "<short factual reason. NFA>"}
+Avoid 50 unless truly even or info is unclear; if 50, justify it briefly.
+`;
 
   try {
-    const text = await callGeminiJSON(key, system, user);
+    const text = await callGeminiText(key, prompt);
 
     if (raw) {
       res.setHeader("Cache-Control", "no-store");
@@ -32,24 +27,11 @@ Task: Estimate ${sideA}'s win probability (0–100) and provide a brief rational
       return;
     }
 
-    let out = {};
-    try {
-      out = JSON.parse(stripFences(text));
-    } catch (e) {
-      res.setHeader("Cache-Control", "no-store");
-      res.status(200).json({
-        gem: { prob: 50, rationale: "No data available; defaulting to neutral." },
-        error: "Parse failure: " + (e?.message || String(e)),
-        raw: text
-      });
-      return;
-    }
-
-    const prob = clamp(out?.prob);
-    const rationale = clip(out?.rationale || "No rationale.", 220);
-
+    const { prob, rationale } = parseJSONish(text);
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ gem: { prob, rationale } });
+    res.status(200).json({
+      gem: { prob: clamp(prob ?? 50), rationale: clip(rationale || "No rationale.", 220) }
+    });
   } catch (e) {
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json({
@@ -59,7 +41,8 @@ Task: Estimate ${sideA}'s win probability (0–100) and provide a brief rational
   }
 }
 
-async function callGeminiJSON(key, system, user) {
+// --- Gemini compat fetch ---
+async function callGeminiText(key, prompt) {
   const apiBases = [
     "https://generativelanguage.googleapis.com/v1beta",
     "https://generativelanguage.googleapis.com/v1",
@@ -74,7 +57,6 @@ async function callGeminiJSON(key, system, user) {
   ];
 
   let lastErr = "No models responded";
-
   for (const base of apiBases) {
     for (const model of models) {
       const url = `${base}/models/${model}:generateContent?key=${key}`;
@@ -82,40 +64,62 @@ async function callGeminiJSON(key, system, user) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            { role: "user", parts: [{ text: system }] },
-            { role: "user", parts: [{ text: user }] },
-          ],
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
-            response_mime_type: "application/json",
-            response_schema: {
-              type: "OBJECT",
-              properties: {
-                prob: { type: "INTEGER" },
-                rationale: { type: "STRING" },
-              },
-              required: ["prob", "rationale"],
-            },
-          },
-          // If your account supports grounding, uncomment:
-          // tools: [{ google_search: {} }],
-        }),
+            // Keep it simple for widest compatibility
+          }
+          // If your account supports it, you can later enable web grounding:
+          // , tools: [{ google_search: {} }]
+        })
       });
 
       const j = await r.json();
-      // If this combo is unsupported, try next
+
+      // Try next combo if model not found on this version
       if (j?.error?.status === "NOT_FOUND") {
         lastErr = j.error.message || "NOT_FOUND";
         continue;
       }
-      const text = j?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+      const text =
+        j?.candidates?.[0]?.content?.parts?.[0]?.text ??
+        ""; // some accounts return empty candidates on rate limits
+
       if (text) return text;
 
       lastErr = j?.error?.message || "Empty response";
     }
   }
   throw new Error(`Gemini call failed: ${lastErr}`);
+}
+
+// --- Parsing helpers ---
+function parseJSONish(s) {
+  const txt = String(s || "").trim();
+
+  // 1) Try direct JSON
+  try {
+    const j = JSON.parse(txt);
+    return { prob: j.prob, rationale: j.rationale };
+  } catch {}
+
+  // 2) Try fenced ```json ... ```
+  const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) {
+    try {
+      const j = JSON.parse(fence[1].trim());
+      return { prob: j.prob, rationale: j.rationale };
+    } catch {}
+  }
+
+  // 3) Last resort: regex for number + quoted rationale
+  const num = txt.match(/"prob"\s*:\s*(\d{1,3})/) || txt.match(/(\d{1,3})\s*%/);
+  const prob = num ? parseInt(num[1], 10) : undefined;
+  const rat = txt.match(/"rationale"\s*:\s*"([^"]+)/i);
+  const rationale = rat ? rat[1] : undefined;
+
+  return { prob, rationale };
 }
 
 function clamp(n) {
@@ -126,8 +130,4 @@ function clamp(n) {
 function clip(s, n) {
   const t = String(s || "").replace(/\s+/g, " ").trim();
   return t.length <= n ? t : t.slice(0, n - 1) + "…";
-}
-function stripFences(s) {
-  const m = String(s || "").match(/```(?:json)?\s*([\s\S]*?)```/i);
-  return m ? m[1].trim() : String(s || "").trim();
 }
